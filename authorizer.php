@@ -1436,6 +1436,34 @@ if ( ! class_exists( 'WP_Plugin_Authorizer' ) ) {
 				return null;
 			}
 
+			if ( $auth_settings['ldap_use_groups'] == 1 ){
+				// Multiple search bases can be provided, so iterate through them until a match is found.
+				$ldap_group_match_found = false;
+				foreach ( $search_bases as $search_base ) {
+					$ldap_search = ldap_search(
+						$ldap,
+						$search_base,
+						"(&(" . $auth_settings['ldap_attr_group_name'] . "=*)(" . $auth_settings['ldap_attr_member_of'] . "=" . $username . "))",
+						array( $auth_settings['ldap_attr_group_name'] )
+					);
+					$ldap_entries = ldap_get_entries( $ldap, $ldap_search );
+					foreach ( $ldap_entries as $entry ){
+						if ( in_array( $entry[$auth_settings['ldap_attr_group_name']], $auth_settings['ldap_groups'] )){
+							// Found match in group break and continue with authentication
+							$ldap_group_match_found = true;
+							break 2;
+						}
+					}
+				}
+			}
+			
+			// If LDAP group feature enabled and no match was found pass through tp wp authentication
+			if ( $auth_settings['ldap_use_groups'] == 1 ){
+				if ( $ldap_group_match_found != true ){
+					return null;
+				}
+			}
+
 			// User successfully authenticated against LDAP, so set the relevant variables.
 			$externally_authenticated_email = $this->lowercase( $username . '@' . $domain );
 
@@ -5882,6 +5910,10 @@ if ( ! class_exists( 'WP_Plugin_Authorizer' ) ) {
 					$auth_settings['ldap_attr_first_name'] = $auth_multisite_settings['ldap_attr_first_name'];
 					$auth_settings['ldap_attr_last_name'] = $auth_multisite_settings['ldap_attr_last_name'];
 					$auth_settings['ldap_attr_update_on_login'] = $auth_multisite_settings['ldap_attr_update_on_login'];
+					$auth_settings['ldap_attr_group_name'] = $auth_multisite_settings['ldap_attr_group_name'];
+					$auth_settings['ldap_attr_member_off'] = $auth_multisite_settings['ldap_attr_member_off'];
+					$auth_settings['ldap_groups'] = $auth_multisite_settings['ldap_groups'];
+					$auth_settings['ldap_use_groups'] = $auth_multisite_settings['ldap_use_groups'];
 
 					// Override access_who_can_login and access_who_can_view
 					$auth_settings['access_who_can_login'] = $auth_multisite_settings['access_who_can_login'];
